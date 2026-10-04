@@ -34,3 +34,26 @@ Thus `2026-10-03T10:02:11-05:00` matches a collection instant of `2026-10-03T14:
 Validation performed: YAML parsing; preserved existing item keys/UUIDs, discovery rules, dashboards and graphs; JavaScript tests using mocked Zabbix HTTP/XML objects for HTTP success, 401/403, 404/500/302, malformed XML, unexpected roots and timeout; clock tests for summer/winter, both 2026 DST transitions, strict ISO mode, drift and invalid dates. Native Zabbix import, Duktape execution and live NVR collection have **not** yet been tested.
 
 Zabbix JavaScript reference: https://www.zabbix.com/documentation/7.4/en/manual/config/items/preprocessing/javascript/javascript_objects
+
+
+
+## Lean inventory revision
+
+The maintained template is **Hikvision NVR by HTTP**, not the separately uploaded camera template.
+
+- Removed Telecontrol ID, encoder version/build date, Supported beep and Supported video loss, including encoder dashboard widgets. Boot-loader items, PTZ and advanced video configuration were already absent from this NVR template and remain absent.
+- Kept device name/model/serial/MAC/type/description/location/ID/contact, firmware/version date, CPU, uptime, current time, clock difference, memory counters and per-disk monitoring. Added optional Hardware version and Memory utilization (used / (used + available), accepting the existing MB counters only).
+- Kept per-camera name, IP, connection/status and protocol. Added optional per-camera Model, Serial number and Firmware version from the NVR's InputProxy channel descriptor. No redundant Camera inventory text item is needed; these fields are individual items. This does not guarantee that every NVR or camera protocol exposes all metadata.
+- Added only **Camera X: Frame rate (max)** among video settings. It is configured main-stream FPS, not a live video measurement or proof of recording. The shared streaming request runs every 5 minutes; unsupported/missing FPS values are discarded. The standard ISAPI stream mapping channel * 100 + 1 is used.
+- Fixed camera metadata lookup to use actual channel IDs rather than array position. Single-channel responses are normalized to an array. Channel discovery tolerates absent descriptors and rejects malformed responses instead of treating failures as an empty inventory.
+- Camera offline trigger logic and disk discovery were not changed in this inventory revision. Live channel status validation remains the next test.
+
+### Importing removals
+
+Back up/export the existing **Hikvision NVR by HTTP** template. Import this YAML with item creation/update enabled. To remove the five intentionally omitted device items from an earlier revision, also enable **Delete missing for Items** after reviewing the import comparison. Leave unrelated deletion options disabled. If deletion is disabled, obsolete items remain in Zabbix. The separately named **Hikvision camera by HTTP** is not modified by this import; any PTZ/advanced-stream items inherited from it remain until that old template is handled separately.
+
+After discovery runs, inspect Camera X: IP Address, Model, Serial number, Firmware version and Frame rate (max). Firmware is the installed version reported by the NVR, not an online latest-version comparison. Fields may have no data when the NVR does not expose them. Direct camera access would require separately verified reachability and camera credentials and is not implemented here.
+
+Research reference (independent implementation using the same InputProxy descriptor fields): https://github.com/aaron-lopes-eng/Hikvision-DVR-NVR-ISAPI/blob/main/README.md
+
+Validation for this revision: parsed YAML, checked master and dashboard item references, verified the first-stage health triggers and HDD discovery were unchanged; ran JavaScript fixtures for singleton/reordered/nonconsecutive channels, absent descriptors, failed responses, main/substream FPS selection and invalid memory units. Live NVR collection and native Zabbix import still require validation.
