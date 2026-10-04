@@ -519,7 +519,7 @@ zabbix_export:
         tags:
         - tag: component
           value: system
-      - uuid: 2956a7b39e0f54e59a0b3e9c2457832c
+      - uuid: 460b18339f9c48e1adb354aa4a6a36cd
         name: Hardware version
         type: DEPENDENT
         key: hikvision_nvr.hardware_version
@@ -537,7 +537,7 @@ zabbix_export:
         tags:
         - tag: component
           value: system
-      - uuid: f91868263fd5523bb1e9b30cc16fa123
+      - uuid: 688c35af209445ccb214a77f2d9fc2fc
         name: Memory utilization
         type: DEPENDENT
         key: hikvision_nvr.memory.util
@@ -558,7 +558,7 @@ zabbix_export:
           value: system
         units: '%'
         description: Percentage derived from used and available memory in MB. Missing/ambiguous counters are discarded.
-      - uuid: 204b7e8e9a6e5bf68ba3ac769645f97c
+      - uuid: c2882a89cf0e4099acdb86cf92339e54
         name: Get streaming channels
         type: SCRIPT
         key: hikvision_nvr.get_streaming
@@ -743,7 +743,7 @@ zabbix_export:
           tags:
           - tag: component
             value: camera
-        - uuid: a275b90e2b6c5b37a7758387789ed049
+        - uuid: ece5f24676f749a9b395dfd163ba0f3e
           name: 'Camera {#CAM_ID}: Model'
           type: DEPENDENT
           key: hikvision_nvr.camera[{#CAM_ID}.model]
@@ -766,7 +766,7 @@ zabbix_export:
           - tag: component
             value: camera
           description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
-        - uuid: c57f33e6d48050e0ae5e5e5ee9a7aa0c
+        - uuid: 487bf57f93fe499d8da11a71161369f1
           name: 'Camera {#CAM_ID}: Serial number'
           type: DEPENDENT
           key: hikvision_nvr.camera[{#CAM_ID}.serial]
@@ -789,7 +789,7 @@ zabbix_export:
           - tag: component
             value: camera
           description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
-        - uuid: 7d69899216775fcaaac13b43f56c7819
+        - uuid: 7617355c5e574c00b953efae26f85271
           name: 'Camera {#CAM_ID}: Firmware version'
           type: DEPENDENT
           key: hikvision_nvr.camera[{#CAM_ID}.firmware]
@@ -812,7 +812,7 @@ zabbix_export:
           - tag: component
             value: camera
           description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
-        - uuid: 6e39c995ba8a5b10804b06d08b233e60
+        - uuid: 2e7f3c0dc90d41aeb76502c985ce7134
           name: 'Camera {#CAM_ID}: Frame rate (max)'
           type: DEPENDENT
           key: hikvision_nvr.camera[{#CAM_ID}.max_frame_rate]
@@ -1466,5 +1466,6 @@ zabbix_export:
           item:
             host: 'Hikvision NVR by HTTP'
             key: hikvision_nvr.memory.available
+
 
 
