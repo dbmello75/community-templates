@@ -558,40 +558,6 @@ zabbix_export:
           value: system
         units: '%'
         description: Percentage derived from used and available memory in MB. Missing/ambiguous counters are discarded.
-      - uuid: c2882a89cf0e4099acdb86cf92339e54
-        name: Get streaming channels
-        type: SCRIPT
-        key: hikvision_nvr.get_streaming
-        history: '0'
-        value_type: TEXT
-        description: Shared raw collection for configured main-stream FPS only; not measured live FPS or recording health.
-        tags:
-        - tag: component
-          value: raw
-        delay: 5m
-        timeout: 10s
-        params: "var p = JSON.parse(value), result = {}, request = new HttpRequest();\nrequest.setHttpAuth(HTTPAUTH_DIGEST, p.user, p.password);\nvar\
-          \ started = Date.now();\ntry {\n    var body = request.get(p.url), code = request.getStatus();\n    var observed = (started + Date.now())\
-          \ / 2;\n    if (code === 401 || code === 403) {\n        return JSON.stringify({_health: 1, _http: code});\n    }\n    if (code !== 200) {\n\
-          \        return JSON.stringify({_health: 2, _http: code});\n    }\n    result = JSON.parse(XML.toJson(body));\n    if (!result[p.root] ||\
-          \ typeof result[p.root] !== 'object') {\n        return JSON.stringify({_health: 2, _http: code});\n    }\n    result._health = 0;\n    result._http\
-          \ = code;\n    result._observed = observed;\n} catch (e) {\n    // Do not return response bodies or exception text containing credentials.\n\
-          \    return JSON.stringify({_health: 2, _http: 0});\n}\nreturn JSON.stringify(result);"
-        parameters:
-        - name: url
-          value: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/Streaming/channels
-        - name: root
-          value: StreamingChannelList
-        - name: user
-          value: '{$USER}'
-        - name: password
-          value: '{$PASSWORD}'
-        preprocessing:
-        - type: CHECK_NOT_SUPPORTED
-          parameters:
-          - '-1'
-          error_handler: CUSTOM_VALUE
-          error_handler_params: '{"_health":2,"_http":0}'
       discovery_rules:
       - uuid: 3ea58a005b904776ba58fe61c9b8b362
         name: Cameras discovery
@@ -797,28 +763,6 @@ zabbix_export:
           - tag: component
             value: camera
           description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
-        - uuid: 2e7f3c0dc90d41aeb76502c985ce7134
-          name: 'Camera {#CAM_ID}: Frame rate (max)'
-          type: DEPENDENT
-          key: hikvision_nvr.camera[{#CAM_ID}.max_frame_rate]
-          value_type: FLOAT
-          preprocessing:
-          - type: JAVASCRIPT
-            parameters:
-            - "var data=JSON.parse(value), list=data.StreamingChannelList && data.StreamingChannelList.StreamingChannel;\nif (!list) { throw 'No stream\
-              \ configuration'; }\nif (!Array.isArray(list)) { list=[list]; }\n// ISAPI main stream IDs: channel 1 -> 101, channel 2 -> 201.\nvar expected=Number('{#CAM_ID}')*100+1;\n\
-              for (var n=0;n<list.length;n++) {\n    var stream=list[n];\n    if (Number(stream.id)!==expected) { continue; }\n    var raw=stream.Video\
-              \ && stream.Video.maxFrameRate;\n    if (raw===undefined || raw===null || String(raw)==='' || !isFinite(Number(raw)) || Number(raw)<0)\
-              \ { throw 'Missing frame rate'; }\n    return Number(raw)/100;\n}\nthrow 'Main stream not reported';"
-            error_handler: DISCARD_VALUE
-          master_item:
-            key: hikvision_nvr.get_streaming
-          tags:
-          - tag: component
-            value: camera
-          units: '!fps'
-          description: Configured main-stream FPS, not actual delivered FPS. ISAPI maxFrameRate is in hundredths of fps. Standard stream ID = channel
-            ID * 100 + 1; unsupported mappings are discarded.
         trigger_prototypes:
         - uuid: f5b71f8cb6154c2994372ace3edbf260
           expression: 'last(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.status])=0
@@ -1451,6 +1395,7 @@ zabbix_export:
           item:
             host: 'Hikvision NVR by HTTP'
             key: hikvision_nvr.memory.available
+
 
 
 
