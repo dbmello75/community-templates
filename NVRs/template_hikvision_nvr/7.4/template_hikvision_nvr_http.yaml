@@ -24,6 +24,9 @@ zabbix_export:
         Copied and modified from Hikvision template
         
         Tested on Hikvision DS-7616NI-K2/16P
+        Health checks: inherited ICMP Ping, API authentication, API data and clock drift.
+        Clock mode defaults to Massachusetts local time with automatic US DST.
+        Set {$HIKVISION.TIME.MODE}=iso8601 to honor the timestamp offset.
       templates:
         - name: 'ICMP Ping'
       groups:
@@ -257,107 +260,105 @@ zabbix_export:
                 - tag: scope
                   value: notice
         - uuid: 7dbabaec74eb430692d2538bfad080c9
-          name: 'Get device info'
-          type: HTTP_AGENT
+          name: Get device info
+          type: SCRIPT
           key: hikvision_nvr.get_info
           history: '0'
           value_type: TEXT
-          authtype: DIGEST
-          username: '{$USER}'
-          password: '{$PASSWORD}'
-          description: 'Used to get the device information'
-          preprocessing:
-            - type: CHECK_NOT_SUPPORTED
-              parameters:
-                - '-1'
-              error_handler: CUSTOM_VALUE
-              error_handler_params: '{"html":{"head":{"title":"Connection error"}}}'
-            - type: XML_TO_JSON
-              error_handler: CUSTOM_VALUE
-              error_handler_params: '{"html":{"head":{"title":"Connection error"}}}'
-          url: 'http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/System/deviceInfo'
-          status_codes: '200,401'
+          description: Used to get the device information
           tags:
-            - tag: component
-              value: raw
+          - tag: component
+            value: raw
+          delay: 1m
+          timeout: 10s
+          params: "var p = JSON.parse(value), result = {}, request = new HttpRequest();\nrequest.setHttpAuth(HTTPAUTH_DIGEST, p.user,\
+            \ p.password);\nvar started = Date.now();\ntry {\n    var body = request.get(p.url), code = request.getStatus();\n   \
+            \ var observed = (started + Date.now()) / 2;\n    if (code === 401 || code === 403) {\n        return JSON.stringify({_health:\
+            \ 1, _http: code});\n    }\n    if (code !== 200) {\n        return JSON.stringify({_health: 2, _http: code});\n    }\n\
+            \    result = JSON.parse(XML.toJson(body));\n    if (!result[p.root] || typeof result[p.root] !== 'object') {\n      \
+            \  return JSON.stringify({_health: 2, _http: code});\n    }\n    result._health = 0;\n    result._http = code;\n    result._observed\
+            \ = observed;\n} catch (e) {\n    // Do not return response bodies or exception text containing credentials.\n    return\
+            \ JSON.stringify({_health: 2, _http: 0});\n}\nreturn JSON.stringify(result);"
+          parameters:
+          - name: url
+            value: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/System/deviceInfo
+          - name: root
+            value: DeviceInfo
+          - name: user
+            value: '{$USER}'
+          - name: password
+            value: '{$PASSWORD}'
+          preprocessing:
+          - type: CHECK_NOT_SUPPORTED
+            parameters:
+            - '-1'
+            error_handler: CUSTOM_VALUE
+            error_handler_params: '{"_health":2,"_http":0}'
         - uuid: c1fd75600fd94884b4e3bd70327fee7d
           name: 'Get device info: Login status'
           type: DEPENDENT
           key: hikvision_nvr.get_info.login_status
           valuemap:
-            name: 'Login status'
+            name: Login status
           preprocessing:
-            - type: JAVASCRIPT
-              parameters:
-                - |
-                  var data = JSON.parse(value);
-                  
-                  if ("html" in data){
-                  	if (data.html.head.title === "Document Error: Unauthorized")
-                  		{return 1}
-                  	else if (data.html.head.title === "Connection error")
-                  		{return 2}
-                  }
-                  return 0;
-            - type: DISCARD_UNCHANGED_HEARTBEAT
-              parameters:
-                - 1h
+          - type: JSONPATH
+            parameters:
+            - $._health
           master_item:
             key: hikvision_nvr.get_info
           tags:
-            - tag: component
-              value: system
+          - tag: component
+            value: system
         - uuid: 7f07c53d7cf4493d9b706585bcfbd954
-          name: 'Get system status'
-          type: HTTP_AGENT
+          name: Get system status
+          type: SCRIPT
           key: hikvision_nvr.get_status
           history: '0'
           value_type: TEXT
-          authtype: DIGEST
-          username: '{$USER}'
-          password: '{$PASSWORD}'
-          description: 'It is used to get the status information of the device'
-          preprocessing:
-            - type: CHECK_NOT_SUPPORTED
-              parameters:
-                - '-1'
-              error_handler: CUSTOM_VALUE
-              error_handler_params: '{"html":{"head":{"title":"Connection error"}}}'
-            - type: XML_TO_JSON
-              error_handler: CUSTOM_VALUE
-              error_handler_params: '{"html":{"head":{"title":"Connection error"}}}'
-          url: 'http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/System/status'
-          status_codes: '200,401'
+          description: It is used to get the status information of the device
           tags:
-            - tag: component
-              value: raw
+          - tag: component
+            value: raw
+          delay: 1m
+          timeout: 10s
+          params: "var p = JSON.parse(value), result = {}, request = new HttpRequest();\nrequest.setHttpAuth(HTTPAUTH_DIGEST, p.user,\
+            \ p.password);\nvar started = Date.now();\ntry {\n    var body = request.get(p.url), code = request.getStatus();\n   \
+            \ var observed = (started + Date.now()) / 2;\n    if (code === 401 || code === 403) {\n        return JSON.stringify({_health:\
+            \ 1, _http: code});\n    }\n    if (code !== 200) {\n        return JSON.stringify({_health: 2, _http: code});\n    }\n\
+            \    result = JSON.parse(XML.toJson(body));\n    if (!result[p.root] || typeof result[p.root] !== 'object') {\n      \
+            \  return JSON.stringify({_health: 2, _http: code});\n    }\n    result._health = 0;\n    result._http = code;\n    result._observed\
+            \ = observed;\n} catch (e) {\n    // Do not return response bodies or exception text containing credentials.\n    return\
+            \ JSON.stringify({_health: 2, _http: 0});\n}\nreturn JSON.stringify(result);"
+          parameters:
+          - name: url
+            value: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/System/status
+          - name: root
+            value: DeviceStatus
+          - name: user
+            value: '{$USER}'
+          - name: password
+            value: '{$PASSWORD}'
+          preprocessing:
+          - type: CHECK_NOT_SUPPORTED
+            parameters:
+            - '-1'
+            error_handler: CUSTOM_VALUE
+            error_handler_params: '{"_health":2,"_http":0}'
         - uuid: 95cd16e115374fd98d15d01e74810022
           name: 'Get system status: Login status'
           type: DEPENDENT
           key: hikvision_nvr.get_status.login_status
           valuemap:
-            name: 'Login status'
+            name: Login status
           preprocessing:
-            - type: JAVASCRIPT
-              parameters:
-                - |
-                  var data = JSON.parse(value);
-                  
-                  if ("html" in data){
-                  	if (data.html.head.title === "Document Error: Unauthorized")
-                  		{return 1}
-                  	else if (data.html.head.title === "Connection error")
-                  		{return 2}
-                  }
-                  return 0;
-            - type: DISCARD_UNCHANGED_HEARTBEAT
-              parameters:
-                - 1h
+          - type: JSONPATH
+            parameters:
+            - $._health
           master_item:
             key: hikvision_nvr.get_status
           tags:
-            - tag: component
-              value: system
+          - tag: component
+            value: system
         - uuid: 75c2822b5e744ccc87d856a417492e01
           name: MACaddress
           type: DEPENDENT
@@ -581,6 +582,37 @@ zabbix_export:
               tags:
                 - tag: scope
                   value: notice
+        - uuid: f6f98b15df7e43c5abfe52568ef3ca19
+          name: Clock difference
+          type: DEPENDENT
+          key: hikvision_nvr.clock.difference
+          value_type: FLOAT
+          units: s
+          description: Absolute clock difference at collection time. us_eastern compares local wall time with US Eastern DST rules;
+            iso8601 honors the supplied offset. Invalid values are discarded and detected by the API alarm.
+          preprocessing:
+          - type: JAVASCRIPT
+            parameters:
+            - "var data = JSON.parse(value);\nif (data._health !== 0) { throw 'System status unavailable'; }\nvar text = String(data.DeviceStatus.currentDeviceTime\
+              \ || '');\nvar m = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$/.exec(text);\n\
+              if (!m) { throw 'Invalid device time'; }\nvar y=+m[1], month=+m[2]-1, day=+m[3], h=+m[4], minute=+m[5], second=+m[6];\n\
+              var wall=Date.UTC(y,month,day,h,minute,second), check=new Date(wall);\nif (check.getUTCFullYear()!==y || check.getUTCMonth()!==month\
+              \ || check.getUTCDate()!==day || h>23 || minute>59 || second>59) { throw 'Invalid device date'; }\nvar observed=Number(data._observed),\
+              \ mode='{$HIKVISION.TIME.MODE}', offset;\nif (!isFinite(observed)) { throw 'Missing observation time'; }\nif (mode ===\
+              \ 'us_eastern') {\n    // Compare wall clocks. NVR is assumed to apply US DST itself.\n    // Current US rules (2007\
+              \ onward); use collection year, never the device year.\n    var year=new Date(observed).getUTCFullYear();\n    var marchSunday=1+(7-new\
+              \ Date(Date.UTC(year,2,1)).getUTCDay())%7+7;\n    var novemberSunday=1+(7-new Date(Date.UTC(year,10,1)).getUTCDay())%7;\n\
+              \    var start=Date.UTC(year,2,marchSunday,7), end=Date.UTC(year,10,novemberSunday,6);\n    offset=(observed>=start\
+              \ && observed<end) ? -240 : -300;\n} else if (mode === 'iso8601') {\n    offset=0;\n    if (m[7] !== 'Z') {\n      \
+              \  var oh=+m[7].slice(1,3), om=+m[7].slice(4,6);\n        if (oh>14 || om>59 || (oh===14 && om!==0)) { throw 'Invalid\
+              \ UTC offset'; }\n        offset=(oh*60+om)*(m[7].charAt(0)==='-' ? -1 : 1);\n    }\n} else { throw 'Unsupported time\
+              \ mode'; }\nreturn Math.round(Math.abs((wall-offset*60000-observed)/1000));"
+            error_handler: DISCARD_VALUE
+          master_item:
+            key: hikvision_nvr.get_status
+          tags:
+          - tag: component
+            value: system
       discovery_rules:
         - uuid: 3ea58a005b904776ba58fe61c9b8b362
           name: 'Cameras discovery'
@@ -951,6 +983,16 @@ zabbix_export:
           type: SECRET_TEXT
         - macro: '{$USER}'
           value: admin
+        - macro: '{$HIKVISION.TIME.MODE}'
+          value: us_eastern
+          description: 'us_eastern: local Massachusetts time with automatic US DST; ignores reported offset. iso8601: honor timestamp
+            offset. Never select us_eastern for other regions.'
+        - macro: '{$HIKVISION.TIME.MAX.DIFF}'
+          value: '180'
+          description: Maximum absolute clock difference in seconds.
+        - macro: '{$HIKVISION.HEALTH.NODATA}'
+          value: 5m
+          description: No-data timeout for API health and valid clock samples; keep above polling interval.
       dashboards:
         - uuid: a9abb600efab4583bfc5749e507d8111
           name: Overview
@@ -1320,6 +1362,68 @@ zabbix_export:
               newvalue: Online
             - value: 'false'
               newvalue: Offline
+  triggers:
+  - uuid: a4bd539045cd414eb4db5c7ccecb15c8
+    expression: (last(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status)=1 or last(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status)=1)
+      and (nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,{$HIKVISION.HEALTH.NODATA})=0) and (nodata(/Hikvision
+      NVR by HTTP/hikvision_nvr.get_status.login_status,{$HIKVISION.HEALTH.NODATA})=0) and last(/Hikvision NVR by HTTP/icmpping)=1
+      and nodata(/Hikvision NVR by HTTP/icmpping,{$HIKVISION.HEALTH.NODATA})=0
+    name: 'Hikvision: API authentication failed'
+    priority: HIGH
+    description: HTTP 401 or 403 from deviceInfo or status. Check credentials and account permissions. Suppressed while ping
+      is down.
+    tags:
+    - tag: scope
+      value: availability
+  - uuid: fa87b879b8a042a2a189e8395770e280
+    expression: ((min(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,#3)=2 and count(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,#3)=3)
+      or (min(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status,#3)=2 and count(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status,#3)=3)
+      or nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,{$HIKVISION.HEALTH.NODATA})=1 or nodata(/Hikvision
+      NVR by HTTP/hikvision_nvr.get_status.login_status,{$HIKVISION.HEALTH.NODATA})=1 or nodata(/Hikvision NVR by HTTP/hikvision_nvr.clock.difference,{$HIKVISION.HEALTH.NODATA})=1)
+      and last(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status)<>1 and last(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status)<>1
+      and last(/Hikvision NVR by HTTP/icmpping)=1 and nodata(/Hikvision NVR by HTTP/icmpping,{$HIKVISION.HEALTH.NODATA})=0
+    name: 'Hikvision: API data unavailable'
+    priority: HIGH
+    description: Three failed samples, missing health samples, or no valid clock sample. Includes HTTP errors, malformed XML,
+      missing expected XML root and invalid time. Inspect the two login status items. Requires fresh successful ping.
+    dependencies:
+    - name: 'Hikvision: API authentication failed'
+      expression: (last(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status)=1 or last(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status)=1)
+        and (nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,{$HIKVISION.HEALTH.NODATA})=0) and (nodata(/Hikvision
+        NVR by HTTP/hikvision_nvr.get_status.login_status,{$HIKVISION.HEALTH.NODATA})=0) and last(/Hikvision NVR by HTTP/icmpping)=1
+        and nodata(/Hikvision NVR by HTTP/icmpping,{$HIKVISION.HEALTH.NODATA})=0
+    tags:
+    - tag: scope
+      value: availability
+  - uuid: 431f7c1c2f4042f7904b01edcb4cbec0
+    expression: min(/Hikvision NVR by HTTP/hikvision_nvr.clock.difference,#3)>{$HIKVISION.TIME.MAX.DIFF} and (nodata(/Hikvision
+      NVR by HTTP/hikvision_nvr.clock.difference,{$HIKVISION.HEALTH.NODATA})=0) and last(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status)=0
+      and last(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status)=0 and (nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,{$HIKVISION.HEALTH.NODATA})=0)
+      and (nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status,{$HIKVISION.HEALTH.NODATA})=0) and last(/Hikvision
+      NVR by HTTP/icmpping)=1 and nodata(/Hikvision NVR by HTTP/icmpping,{$HIKVISION.HEALTH.NODATA})=0 and count(/Hikvision
+      NVR by HTTP/hikvision_nvr.clock.difference,#3)=3
+    name: 'Hikvision: Clock out of sync'
+    event_name: 'Hikvision: Clock difference exceeds {$HIKVISION.TIME.MAX.DIFF}s'
+    opdata: 'Clock difference: {ITEM.LASTVALUE1}'
+    priority: WARNING
+    description: Three consecutive collected clock differences exceed tolerance. Recovers on a sample within tolerance. Time
+      mode is explicit; us_eastern assumes the NVR manages DST.
+    dependencies:
+    - name: 'Hikvision: API authentication failed'
+      expression: (last(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status)=1 or last(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status)=1)
+        and (nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,{$HIKVISION.HEALTH.NODATA})=0) and (nodata(/Hikvision
+        NVR by HTTP/hikvision_nvr.get_status.login_status,{$HIKVISION.HEALTH.NODATA})=0) and last(/Hikvision NVR by HTTP/icmpping)=1
+        and nodata(/Hikvision NVR by HTTP/icmpping,{$HIKVISION.HEALTH.NODATA})=0
+    - name: 'Hikvision: API data unavailable'
+      expression: ((min(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,#3)=2 and count(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,#3)=3)
+        or (min(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status,#3)=2 and count(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status,#3)=3)
+        or nodata(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status,{$HIKVISION.HEALTH.NODATA})=1 or nodata(/Hikvision
+        NVR by HTTP/hikvision_nvr.get_status.login_status,{$HIKVISION.HEALTH.NODATA})=1 or nodata(/Hikvision NVR by HTTP/hikvision_nvr.clock.difference,{$HIKVISION.HEALTH.NODATA})=1)
+        and last(/Hikvision NVR by HTTP/hikvision_nvr.get_info.login_status)<>1 and last(/Hikvision NVR by HTTP/hikvision_nvr.get_status.login_status)<>1
+        and last(/Hikvision NVR by HTTP/icmpping)=1 and nodata(/Hikvision NVR by HTTP/icmpping,{$HIKVISION.HEALTH.NODATA})=0
+    tags:
+    - tag: scope
+      value: availability
   graphs:
     - uuid: 6248c844169140a6b4cf194f693fa5f3
       name: 'Hikvision NVR: CPU utilization'
@@ -1346,3 +1450,4 @@ zabbix_export:
           item:
             host: 'Hikvision NVR by HTTP'
             key: hikvision_nvr.memory.available
+
