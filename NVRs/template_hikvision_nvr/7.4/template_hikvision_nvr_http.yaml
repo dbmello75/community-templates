@@ -712,21 +712,6 @@ zabbix_export:
           tags:
           - tag: component
             value: camera
-        - uuid: 07b4c95e445b472fa22fe4c216f7b613
-          name: 'Camera {#CAM_ID}: Proxy protocol'
-          type: DEPENDENT
-          key: hikvision_nvr.camera[{#CAM_ID}.proxy.protocol]
-          value_type: TEXT
-          preprocessing:
-          - type: JSONPATH
-            parameters:
-            - $.InputProxyChannelList.InputProxyChannel[?(@.id=="{#CAM_ID}")].sourceInputPortDescriptor.proxyProtocol.first()
-            error_handler: DISCARD_VALUE
-          master_item:
-            key: hikvision_nvr.camera[{#CAM_ID}.info]
-          tags:
-          - tag: component
-            value: camera
         - uuid: 7fe549223ae54f2db8c57f0cc560aaf3
           name: 'Camera {#CAM_ID}: status'
           type: DEPENDENT
