@@ -57,3 +57,8 @@ After discovery runs, inspect Camera X: IP Address, Model, Serial number, Firmwa
 Research reference (independent implementation using the same InputProxy descriptor fields): https://github.com/aaron-lopes-eng/Hikvision-DVR-NVR-ISAPI/blob/main/README.md
 
 Validation for this revision: parsed YAML, checked master and dashboard item references, verified the first-stage health triggers and HDD discovery were unchanged; ran JavaScript fixtures for singleton/reordered/nonconsecutive channels, absent descriptors, failed responses, main/substream FPS selection and invalid memory units. Live NVR collection and native Zabbix import still require validation.
+
+
+## Configured FPS removed
+
+Per user request, Camera X: Frame rate (max) and its now-unused Get streaming channels collector have been removed. Earlier notes about configured FPS describe the previous revision. Real FPS and live bitrate are not implemented yet; they require supported runtime status responses from the NVR. Remove the missing item prototype and unused master item when reviewing the next import.
