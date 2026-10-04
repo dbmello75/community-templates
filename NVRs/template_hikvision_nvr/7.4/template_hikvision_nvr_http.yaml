@@ -558,37 +558,75 @@ zabbix_export:
           value: system
         units: '%'
         description: Percentage derived from used and available memory in MB. Missing/ambiguous counters are discarded.
+      - uuid: 0d3cee8d09d65ea9a0c5c4c4e2ffc20d
+        name: Get camera recording status
+        type: SCRIPT
+        key: hikvision_nvr.get_recording_status
+        value_type: TEXT
+        history: '0'
+        delay: 5m
+        timeout: 20s
+        params: "var p=JSON.parse(value), r=new HttpRequest();\nr.setHttpAuth(HTTPAUTH_DIGEST,p.user,p.password);\ntry\
+          \ {\n var body=r.get(p.url), code=r.getStatus();\n if(code!==200) return JSON.stringify({health:code===401||code===403?1:2});\n\
+          \ var data=JSON.parse(body), list=data.ChanStatusList && data.ChanStatusList.ChanStatus;\n if(!list) throw 'Missing\
+          \ channel list';\n if(!Array.isArray(list)) list=[list];\n return JSON.stringify({health:0,channels:list});\n\
+          } catch(e) {return JSON.stringify({health:2});}"
+        parameters:
+        - name: url
+          value: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/System/workingstatus/chanStatus?format=json
+        - name: user
+          value: '{$USER}'
+        - name: password
+          value: '{$PASSWORD}'
+        preprocessing:
+        - type: CHECK_NOT_SUPPORTED
+          parameters:
+          - '-1'
+          error_handler: CUSTOM_VALUE
+          error_handler_params: '{"health":2}'
+        tags:
+        - tag: component
+          value: raw
       discovery_rules:
       - uuid: 3ea58a005b904776ba58fe61c9b8b362
         name: Cameras discovery
         type: HTTP_AGENT
         key: hikvision_nvr.channels.discovery
-        delay: 1h
+        delay: 10m
         authtype: DIGEST
         username: '{$USER}'
         password: '{$PASSWORD}'
         item_prototypes:
         - uuid: 6500055b4d804264b7bb17c2e9825cf5
           name: 'Camera status discovery: Camera {#CAM_ID}'
-          type: HTTP_AGENT
+          type: SCRIPT
           key: hikvision_nvr.camera.status[{#CAM_ID}.info]
-          delay: 5m
           value_type: TEXT
-          authtype: DIGEST
-          username: '{$USER}'
-          password: '{$PASSWORD}'
-          description: Used to get the cameras information
+          history: '0'
+          delay: 5m
+          timeout: 20s
+          params: "var p=JSON.parse(value), r=new HttpRequest();\nr.setHttpAuth(HTTPAUTH_DIGEST,p.user,p.password);\n\
+            try {\n var body=r.get(p.url), code=r.getStatus();\n if(code!==200) return JSON.stringify({health:code===401||code===403?1:2});\n\
+            \ var o=JSON.parse(XML.toJson(body)).InputProxyChannelStatus;\n if(!o || String(o.id)!==p.channel) throw 'Invalid\
+            \ channel';\n var on=String(o.online).toLowerCase();\n if(['true','false','0','1'].indexOf(on)<0) throw 'Invalid\
+            \ online state';\n o.online=(on==='true'||on==='1')?'true':'false';\n if(typeof o.chanDetectResult!=='string'||!o.chanDetectResult)\
+            \ o.chanDetectResult='unknown';\n return JSON.stringify({health:0,InputProxyChannelStatus:o});\n} catch(e)\
+            \ {return JSON.stringify({health:2});}"
+          parameters:
+          - name: url
+            value: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/ContentMgmt/InputProxy/channels/{#CAM_ID}/status
+          - name: user
+            value: '{$USER}'
+          - name: password
+            value: '{$PASSWORD}'
+          - name: channel
+            value: '{#CAM_ID}'
           preprocessing:
           - type: CHECK_NOT_SUPPORTED
             parameters:
             - '-1'
             error_handler: CUSTOM_VALUE
-            error_handler_params: '{"html":{"head":{"title":"Connection error"}}}'
-          - type: XML_TO_JSON
-            error_handler: CUSTOM_VALUE
-            error_handler_params: '{"html":{"head":{"title":"Connection error"}}}'
-          url: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/ContentMgmt/InputProxy/channels/{#CAM_ID}/status
-          status_codes: 200,401
+            error_handler_params: '{"health":2}'
           tags:
           - tag: component
             value: raw
@@ -598,11 +636,12 @@ zabbix_export:
           key: hikvision_nvr.camera[{#CAM_ID}.connection]
           value_type: CHAR
           valuemap:
-            name: Online status
+            name: Connection diagnostic
           preprocessing:
           - type: JSONPATH
             parameters:
             - $.InputProxyChannelStatus.chanDetectResult
+            error_handler: DISCARD_VALUE
           master_item:
             key: hikvision_nvr.camera.status[{#CAM_ID}.info]
           tags:
@@ -630,17 +669,17 @@ zabbix_export:
           - type: JAVASCRIPT
             parameters:
             - 'var data=JSON.parse(value);
-      
+
               if (!data.InputProxyChannelList) { throw ''Missing channel list''; }
-      
+
               var channels=data.InputProxyChannelList.InputProxyChannel;
-      
+
               if (channels === undefined || channels === null) { channels=[]; }
-      
+
               if (!Array.isArray(channels)) { channels=[channels]; }
-      
+
               data.InputProxyChannelList.InputProxyChannel=channels;
-      
+
               return JSON.stringify(data);'
             error_handler: DISCARD_VALUE
           url: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/ContentMgmt/InputProxy/channels
@@ -689,6 +728,7 @@ zabbix_export:
           - type: JSONPATH
             parameters:
             - $.InputProxyChannelStatus.online
+            error_handler: DISCARD_VALUE
           master_item:
             key: hikvision_nvr.camera.status[{#CAM_ID}.info]
           tags:
@@ -716,7 +756,8 @@ zabbix_export:
           tags:
           - tag: component
             value: camera
-          description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
+          description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded;
+            no alarm is generated.
         - uuid: 487bf57f93fe499d8da11a71161369f1
           name: 'Camera {#CAM_ID}: Serial number'
           type: DEPENDENT
@@ -739,7 +780,8 @@ zabbix_export:
           tags:
           - tag: component
             value: camera
-          description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
+          description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded;
+            no alarm is generated.
         - uuid: 7617355c5e574c00b953efae26f85271
           name: 'Camera {#CAM_ID}: Firmware version'
           type: DEPENDENT
@@ -762,32 +804,208 @@ zabbix_export:
           tags:
           - tag: component
             value: camera
-          description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded; no alarm is generated.
+          description: Optional metadata reported by the NVR, not a direct camera request. Missing values are discarded;
+            no alarm is generated.
+        - uuid: ca53d08cad9154518bf9d93429a370a1
+          name: 'Camera {#CAM_ID}: Status query health'
+          type: DEPENDENT
+          key: hikvision_nvr.camera[{#CAM_ID}.query_health]
+          value_type: UNSIGNED
+          master_item:
+            key: hikvision_nvr.camera.status[{#CAM_ID}.info]
+          preprocessing:
+          - type: JAVASCRIPT
+            parameters:
+            - return JSON.parse(value).health;
+          tags:
+          - tag: component
+            value: camera
+        - uuid: 12bc79269583582b9e774d0f3501f5b0
+          name: 'Camera {#CAM_ID}: Recording status'
+          type: DEPENDENT
+          key: hikvision_nvr.camera[{#CAM_ID}.record_status]
+          value_type: UNSIGNED
+          master_item:
+            key: hikvision_nvr.get_recording_status
+          preprocessing:
+          - type: JAVASCRIPT
+            parameters:
+            - 'var d=JSON.parse(value); if(d.health!==0) throw ''Recording status unavailable'';
+
+              var a=d.channels.filter(function(c){return String(c.chanNo)===''{#CAM_ID}'';});
+
+              if(a.length!==1 || !/^[0-3]$/.test(String(a[0].recordStatus))) throw ''Missing or invalid recordStatus'';
+
+              return Number(a[0].recordStatus);'
+            error_handler: DISCARD_VALUE
+          tags:
+          - tag: component
+            value: camera
+          valuemap:
+            name: Recording status
+        - uuid: bef5b87020cf5686b1fa8aa45e77ee17
+          name: 'Camera {#CAM_ID}: Search recordings (24h)'
+          type: SCRIPT
+          key: hikvision_nvr.camera[{#CAM_ID}.record_search]
+          value_type: TEXT
+          history: '0'
+          delay: 60m
+          timeout: 20s
+          params: "var p=JSON.parse(value), r=new HttpRequest();\nr.setHttpAuth(HTTPAUTH_DIGEST,p.user,p.password);\n\
+            function fail(){return JSON.stringify({health:2});}\ntry {\n var ch=Number(p.channel); if(!/^[1-9][0-9]*$/.test(p.channel))\
+            \ return fail();\n var end=new Date(), start=new Date(end.getTime()-86400000);\n var sid='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var\
+            \ n=Math.floor(Math.random()*16);return (c==='x'?n:(n&3)|8).toString(16);});\n var track=String(ch*100+1);\n\
+            \ var xml='<CMSearchDescription version=\"1.0\" xmlns=\"http://www.hikvision.com/ver20/XMLSchema\"><searchID>'+sid+'</searchID><trackIDList><trackID>'+track+'</trackID></trackIDList><timeSpanList><timeSpan><startTime>'+start.toISOString().replace(/\\\
+            .\\d{3}Z$/,'Z')+'</startTime><endTime>'+end.toISOString().replace(/\\.\\d{3}Z$/,'Z')+'</endTime></timeSpan></timeSpanList><maxResults>1</maxResults><searchResultPostion>0</searchResultPostion><metadataList><metadataDescriptor>//recordType.meta.std-cgi.com</metadataDescriptor></metadataList></CMSearchDescription>';\n\
+            \ r.addHeader('Content-Type: application/xml');\n var body=r.post(p.url,xml),code=r.getStatus();\n if(code!==200)\
+            \ return JSON.stringify({health:code===401||code===403?1:2});\n var o=JSON.parse(XML.toJson(body)).CMSearchResult;\n\
+            \ if(!o || String(o.searchID)!==sid || !/^(true|1)$/.test(String(o.responseStatus))) return fail();\n var\
+            \ state=String(o.responseStatusStrg), n=String(o.numOfMatches);\n if(!/^[0-9]+$/.test(n)) return fail();\n\
+            \ var hits=o.matchList && o.matchList.searchMatchItem;\n if(Number(n)===0 && (state==='NO MATCHES'||state==='OK')\
+            \ && !hits) return JSON.stringify({health:0,present:0});\n if(Number(n)>0 && (state==='OK'||state==='MORE')\
+            \ && hits) {\n  if(!Array.isArray(hits)) hits=[hits];\n  var valid=hits.some(function(h){var s=h.timeSpan||{},a=Date.parse(s.startTime),b=Date.parse(s.endTime);return\
+            \ String(h.trackID)===track && isFinite(a)&&isFinite(b)&&b>=a&&b>start.getTime()&&a<end.getTime();});\n  if(valid)\
+            \ return JSON.stringify({health:0,present:1});\n }\n return fail();\n} catch(e) {return fail();}"
+          parameters:
+          - name: url
+            value: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/ContentMgmt/search
+          - name: user
+            value: '{$USER}'
+          - name: password
+            value: '{$PASSWORD}'
+          - name: channel
+            value: '{#CAM_ID}'
+          preprocessing:
+          - type: CHECK_NOT_SUPPORTED
+            parameters:
+            - '-1'
+            error_handler: CUSTOM_VALUE
+            error_handler_params: '{"health":2}'
+          tags:
+          - tag: component
+            value: raw
+        - uuid: 8f27a9ac326b53da9be616dad1454b7e
+          name: 'Camera {#CAM_ID}: Recording search health'
+          type: DEPENDENT
+          key: hikvision_nvr.camera[{#CAM_ID}.record_search_health]
+          value_type: UNSIGNED
+          master_item:
+            key: hikvision_nvr.camera[{#CAM_ID}.record_search]
+          preprocessing:
+          - type: JAVASCRIPT
+            parameters:
+            - return JSON.parse(value).health;
+          tags:
+          - tag: component
+            value: camera
+        - uuid: a2d4dcffaecb52799e33d8d9e5e732b8
+          name: 'Camera {#CAM_ID}: Recordings present in last 24h'
+          type: DEPENDENT
+          key: hikvision_nvr.camera[{#CAM_ID}.record_present]
+          value_type: UNSIGNED
+          master_item:
+            key: hikvision_nvr.camera[{#CAM_ID}.record_search]
+          preprocessing:
+          - type: JAVASCRIPT
+            parameters:
+            - var d=JSON.parse(value); if(d.health!==0 || (d.present!==0 && d.present!==1)) throw 'Search unavailable';
+              return d.present;
+            error_handler: DISCARD_VALUE
+          tags:
+          - tag: component
+            value: camera
         trigger_prototypes:
         - uuid: f5b71f8cb6154c2994372ace3edbf260
-          expression: 'last(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.status])=0
-      
-            and last(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.connection])<>"notExist"
-      
-            '
+          expression: count(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.status],#3,"eq","false")=3 and last(/Hikvision
+            NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.query_health])=0 and nodata(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.query_health],15m)=0
+            and last(/Hikvision NVR by HTTP/icmpping)=1 and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
           name: 'Hikvision: Camera {#CAM_ID} is offline'
-          event_name: 'Hikvision: Camera {#CAM_ID} is offline. Check status.'
+          event_name: 'Hikvision: Camera {#CAM_ID} is offline'
           priority: HIGH
-          description: SMART status of HDD is not normal.
+          description: Three consecutive offline samples (5m polling); includes notExist for known cameras. Invalid API
+            responses generate query-health alerts, never offline samples.
           tags:
           - tag: scope
             value: high
-        url: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/ContentMgmt/InputProxy/channels
-        status_codes: 200,401
+          opdata: 'Connection: {?last(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.connection])}'
+        - uuid: 05f82d50643e57a183ec5e85fe6e6cb9
+          name: 'Hikvision: Camera {#CAM_ID} status query failed'
+          expression: (count(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.query_health],#2,"gt",0)=2 or nodata(/Hikvision
+            NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.query_health],15m)=1) and last(/Hikvision NVR by HTTP/icmpping)=1
+            and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
+          priority: WARNING
+          tags:
+          - tag: component
+            value: camera
+        - uuid: f87e22522d4b5070827a5bf82f9cb850
+          name: 'Hikvision: Camera {#CAM_ID} recording status 2 (test)'
+          expression: count(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_status],#3,"eq",2)=3 and nodata(/Hikvision
+            NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_status],15m)=0 and last(/Hikvision NVR by HTTP/icmpping)=1
+            and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
+          priority: WARNING
+          tags:
+          - tag: component
+            value: camera
+          - tag: stage
+            value: test
+          description: 'Experimental: three consecutive samples. Validate against recording schedule and actual playback.'
+        - uuid: d19646cc094654c39ebba24e1a3bea28
+          name: 'Hikvision: Camera {#CAM_ID} recording status 3 (test)'
+          expression: count(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_status],#3,"eq",3)=3 and nodata(/Hikvision
+            NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_status],15m)=0 and last(/Hikvision NVR by HTTP/icmpping)=1
+            and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
+          priority: WARNING
+          tags:
+          - tag: component
+            value: camera
+          - tag: stage
+            value: test
+          description: 'Experimental: three consecutive samples. Validate against recording schedule and actual playback.'
+        - uuid: 2529d281cfec53afaacb1254cd333ee8
+          name: 'Hikvision: Camera {#CAM_ID} recording status unavailable'
+          expression: nodata(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_status],15m)=1 and last(/Hikvision
+            NVR by HTTP/icmpping)=1 and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
+          priority: WARNING
+          tags:
+          - tag: component
+            value: camera
+        - uuid: 3a0f29f82b125e1f99fc1b805eab9e27
+          name: 'Hikvision: Camera {#CAM_ID} has no recordings in last 24h'
+          expression: last(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_present])=0 and last(/Hikvision
+            NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_search_health])=0 and nodata(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_search_health],90m)=0
+            and last(/Hikvision NVR by HTTP/icmpping)=1 and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
+          priority: HIGH
+          tags:
+          - tag: component
+            value: camera
+        - uuid: 83094c0f6c125886b95a7377e9da4a6e
+          name: 'Hikvision: Camera {#CAM_ID} recording search failed'
+          expression: (last(/Hikvision NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_search_health])<>0 or nodata(/Hikvision
+            NVR by HTTP/hikvision_nvr.camera[{#CAM_ID}.record_search_health],90m)=1) and last(/Hikvision NVR by HTTP/icmpping)=1
+            and nodata(/Hikvision NVR by HTTP/icmpping,5m)=0
+          priority: WARNING
+          tags:
+          - tag: component
+            value: camera
+        url: http://{$HIKVISION_ISAPI_HOST}:{$HIKVISION_ISAPI_PORT}/ISAPI/ContentMgmt/InputProxy/channels/status
+        status_codes: '200'
         preprocessing:
         - type: XML_TO_JSON
         - type: JAVASCRIPT
           parameters:
-          - "var data=JSON.parse(value);\nif (!data.InputProxyChannelList) { throw 'Missing channel list'; }\nvar channels=data.InputProxyChannelList.InputProxyChannel\
-            \ || [];\nif (!Array.isArray(channels)) { channels=[channels]; }\nvar out=[];\nchannels.forEach(function(cam) {\n    if (!cam || !/^\\d+$/.test(String(cam.id)))\
-            \ { return; }\n    var desc=cam.sourceInputPortDescriptor || {};\n    out.push({\"{#CAM_ID}\":String(cam.id), \"{#CAM_NAME}\":String(cam.name\
-            \ || ''),\n        \"{#CAM_IP}\":String(desc.ipAddress || ''), \"{#CAM_PORT}\":String(desc.managePortNo || ''),\n        \"{#CAM_PROT}\"\
-            :String(desc.proxyProtocol || '')});\n});\nreturn JSON.stringify(out);"
+          - "var data=JSON.parse(value), root=data.InputProxyChannelStatusList;\nif (!root || typeof root!=='object')\
+            \ throw 'Invalid channel status list';\nvar channels=root.InputProxyChannelStatus;\nif (channels===undefined)\
+            \ throw 'Missing channel status entries';\nif (!Array.isArray(channels)) channels=[channels];\nvar out=[],seen={};\n\
+            channels.forEach(function(c) {\n if (!c || !/^[1-9][0-9]*$/.test(String(c.id)) || seen[c.id]) throw 'Invalid\
+            \ or duplicate channel ID';\n seen[c.id]=true;\n var on=String(c.online).toLowerCase();\n if (['true','false','0','1'].indexOf(on)<0)\
+            \ throw 'Invalid online state';\n if (String(c.chanDetectResult)==='notExist' && (on==='false'||on==='0'))\
+            \ return;\n var s=c.sourceInputPortDescriptor||{};\n out.push({'{#CAM_ID}':String(c.id),'{#CAM_NAME}':String(c.name||''),'{#CAM_IP}':String(s.ipAddress||''),'{#CAM_PORT}':String(s.managePortNo||''),'{#CAM_PROT}':String(s.proxyProtocol||'')});\n\
+            });\nreturn JSON.stringify(out);"
+        lifetime_type: DELETE_NEVER
+        enabled_lifetime_type: DISABLE_NEVER
+        description: 'Discover every 10m. Skip never-seen offline notExist channels. Never disable/delete lost resources:
+          previously discovered cameras remain monitored. Migration: manually remove confirmed empty channels discovered
+          by the old rule. Retire real cameras explicitly.'
       - uuid: 5d910da92e6c45afa9825d3dfeb7e133
         name: Storage discovery
         type: HTTP_AGENT
@@ -1291,6 +1509,50 @@ zabbix_export:
               name: secondary_label_size_type
               value: '1'
       valuemaps:
+        - uuid: a13bc70d121e5c8094ba4e98d0163fb8
+          name: Connection diagnostic
+          mappings:
+          - value: connect
+            newvalue: Connected
+          - value: connecting
+            newvalue: Connecting
+          - value: notExist
+            newvalue: Camera not detected
+          - value: netUnreachable
+            newvalue: Network unreachable
+          - value: errorUserNameOrPasswd
+            newvalue: Incorrect username or password
+          - value: ipcStreamFail
+            newvalue: Failed to obtain video stream
+          - value: overSysBandwidth
+            newvalue: Insufficient bandwidth
+          - value: domainError
+            newvalue: Invalid domain name
+          - value: chanNoError
+            newvalue: Invalid channel number
+          - value: ipAddrConflictWithDev
+            newvalue: IP conflicts with NVR
+          - value: ipAddrConflictWithIpc
+            newvalue: IP address conflict
+          - value: ipcStreamTypeNotSupport
+            newvalue: Unsupported stream type
+          - value: ipcResolutionNotSupport
+            newvalue: Unsupported resolution
+          - value: unknownError
+            newvalue: Unknown connection error
+          - value: unknown
+            newvalue: Diagnostic unavailable
+        - uuid: 3a56b47f3f2353799506471617dbeaa5
+          name: Recording status
+          mappings:
+          - value: '0'
+            newvalue: Recording
+          - value: '1'
+            newvalue: 'Recording exception: HDD'
+          - value: '2'
+            newvalue: 'Recording exception: camera offline'
+          - value: '3'
+            newvalue: 'Recording exception: other reason'
         - uuid: 530c9369f8c2451c82f4e2ce561fae28
           name: 'Login status'
           mappings:
@@ -1395,6 +1657,7 @@ zabbix_export:
           item:
             host: 'Hikvision NVR by HTTP'
             key: hikvision_nvr.memory.available
+
 
 
 
